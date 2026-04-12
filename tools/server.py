@@ -77,6 +77,7 @@ async def call_mcp_tool(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
 
 def call_mcp_tool_sync(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
     """Synchronously invoke an MCP tool from LangGraph nodes."""
+    
     try:
         return asyncio.run(call_mcp_tool(name, arguments))
     except RuntimeError:
@@ -85,3 +86,6 @@ def call_mcp_tool_sync(name: str, arguments: Dict[str, Any]) -> Dict[str, Any]:
             return loop.run_until_complete(call_mcp_tool(name, arguments))
         finally:
             loop.close()
+
+if __name__ == "__main__":
+    MCP_SERVER.run()  # stdio transport (default)
