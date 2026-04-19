@@ -62,6 +62,7 @@ class SKURecommendation:
     risk_tags: List[str]
     confidence: Literal["high", "medium", "low"]
     data_quality_flag: Optional[str]
+    reasoning_summary: Optional[str] = None
 
 
 class AgentState(TypedDict):
@@ -81,6 +82,8 @@ class AgentState(TypedDict):
 
     llm_prompts: Dict[str, str]
     llm_responses: Dict[str, str]
+    llm_reasoning: Dict[str, str]
+    llm_reasoning_by_sku: Dict[str, str]
     llm_retries: Dict[str, int]
     flow_events: List[Dict[str, Any]]
     tool_call_logs: List[Dict[str, Any]]
@@ -100,6 +103,7 @@ class AgentState(TypedDict):
     warnings: List[str]
     partial_data: bool
     graph_source: str
+    graph_runtime_stats: Dict[str, Any]
     output_valid: bool
 
     final_output: Optional[Dict[str, Any]]

@@ -12,7 +12,6 @@ def _base_config(data_path: str) -> dict:
     cfg = load_threshold_config("config/thresholds.yaml")
     cfg["data_path"] = data_path
     cfg["config_path"] = "config/thresholds.yaml"
-    cfg["kg_seed_path"] = "data/kg_seed.json"
     return cfg
 
 

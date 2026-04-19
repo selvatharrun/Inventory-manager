@@ -67,6 +67,7 @@ def load_data_node(state: AgentState) -> AgentState:
         warnings.append(f"SKU scope applied: {len(records)} matching SKU(s) selected.")
 
     state["raw_records"] = records
+    state["config"]["runtime_records"] = records
     state["warnings"].extend(warnings)
     if invalid_rows:
         state["partial_data"] = True

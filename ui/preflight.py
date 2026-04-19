@@ -8,6 +8,7 @@ from typing import Any, Dict, List
 
 import httpx
 
+from knowledge.networkx_graph import build_runtime_graph
 from tools.server import MCP_SERVER
 
 
@@ -77,6 +78,19 @@ def _check_registered_tools() -> Dict[str, Any]:
         }
     except Exception as exc:
         return {"name": "required_tools", "ok": False, "detail": f"Tool registry check failed: {exc}"}
+
+
+def _check_runtime_graph(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+    """Validate runtime graph can be built from uploaded dataset."""
+    try:
+        graph = build_runtime_graph(records)
+        return {
+            "name": "runtime_graph",
+            "ok": True,
+            "detail": f"Runtime graph ready: nodes={graph.number_of_nodes()} edges={graph.number_of_edges()}",
+        }
+    except Exception as exc:
+        return {"name": "runtime_graph", "ok": False, "detail": f"Runtime graph build failed: {exc}"}
 
 
 def _check_ollama_tags(base_url: str, model: str) -> Dict[str, Any]:
@@ -169,15 +183,14 @@ def _check_planner_probe(
     base_url: str,
     model: str,
     api_key: str = "",
-    planner_timeout_ms: int = 0,
 ) -> Dict[str, Any]:
     """Run a lightweight planner probe and validate strict JSON shape."""
     headers = {"Content-Type": "application/json"}
     if api_key.strip():
         headers["Authorization"] = f"Bearer {api_key.strip()}"
 
-    timeout_seconds: float | None = None if int(planner_timeout_ms) <= 0 else max(5.0, float(planner_timeout_ms) / 1000.0)
-    timeout_label = "none" if timeout_seconds is None else f"{timeout_seconds:.1f}s"
+    timeout_seconds: float | None = None
+    timeout_label = "none"
 
     probe_prompt = {
         "instruction": "Return one action in strict JSON.",
@@ -260,8 +273,8 @@ def run_preflight_checks(
     base_url: str,
     model: str,
     records_count: int,
+    records: List[Dict[str, Any]] | None = None,
     api_key: str = "",
-    planner_timeout_ms: int = 0,
 ) -> Dict[str, Any]:
     """Run E2E preflight checks for full-agent runs."""
     checks: List[Dict[str, Any]] = []
@@ -274,6 +287,9 @@ def run_preflight_checks(
         }
     )
 
+    if str(mode).lower() == "thinking":
+        checks.append(_check_runtime_graph(records if isinstance(records, list) else []))
+
     if str(mode).lower() == "thinking" and str(agent_mode).lower() == "full":
         checks.append(_check_registered_tools())
         checks.append(_check_ollama_tags(base_url, model))
@@ -285,7 +301,6 @@ def run_preflight_checks(
                     base_url,
                     model,
                     api_key=api_key,
-                    planner_timeout_ms=planner_timeout_ms,
                 )
             )
 

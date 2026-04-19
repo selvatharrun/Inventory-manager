@@ -11,17 +11,6 @@ import httpx
 import streamlit as st
 
 
-def profile_defaults(profile: str) -> Dict[str, Any]:
-    """Return default LLM settings for a profile."""
-    if profile == "Strict latency":
-        return {
-            "temperature": 0.1,
-        }
-    return {
-        "temperature": 0.1,
-    }
-
-
 @st.cache_data(ttl=12)
 def get_ollama_models(base_url: str) -> Tuple[bool, List[str], str]:
     """Fetch installed Ollama model tags from local runtime."""
@@ -71,18 +60,14 @@ def build_run_config(
     cfg = json.loads(json.dumps(base_cfg))
     cfg["data_path"] = data_path
     cfg["config_path"] = "config/thresholds.yaml"
-    cfg["kg_seed_path"] = "data/kg_seed.json"
 
     ollama_cfg = cfg.setdefault("ollama", {})
     ollama_cfg["base_url"] = settings["base_url"]
     ollama_cfg["model"] = settings["model"]
-    ollama_cfg["timeout_ms"] = int(settings.get("timeout_ms", 0))
     ollama_cfg["temperature"] = float(settings["temperature"])
-    if "num_predict" in settings:
-        ollama_cfg["num_predict"] = int(settings["num_predict"])
-    else:
-        ollama_cfg.pop("num_predict", None)
-    ollama_cfg["planner_timeout_ms"] = int(settings.get("planner_timeout_ms", 0))
+    ollama_cfg.pop("timeout_ms", None)
+    ollama_cfg.pop("num_predict", None)
+    ollama_cfg.pop("planner_timeout_ms", None)
 
     cfg["mode"] = settings.get("mode", "thinking")
     cfg["agent_mode"] = settings.get("agent_mode", "deterministic")

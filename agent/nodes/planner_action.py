@@ -193,8 +193,7 @@ def planner_action_node(state: AgentState) -> AgentState:
     ollama_cfg = state["config"].get("ollama", {})
     base_url = str(ollama_cfg.get("base_url", "http://localhost:11434")).rstrip("/")
     model = str(ollama_cfg.get("model", "llama3.2:1b"))
-    planner_timeout_ms = int(ollama_cfg.get("planner_timeout_ms", 2500))
-    timeout_seconds: float | None = None if planner_timeout_ms <= 0 else max(1.0, float(planner_timeout_ms) / 1000)
+    timeout_seconds: float | None = None
     api_key = str(ollama_cfg.get("api_key", "")).strip()
     headers: Dict[str, str] = {"Content-Type": "application/json"}
     if api_key:

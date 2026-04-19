@@ -26,7 +26,7 @@ def render_sidebar(base_cfg: Dict[str, Any]) -> None:
         else:
             status_pill("Ollama offline", "warn")
 
-        status_pill("Graph: NetworkX/cache", "ok")
+        status_pill("Graph: Runtime NetworkX", "ok")
         if models:
             status_pill(f"Models available: {len(models)}", "ok")
         else:

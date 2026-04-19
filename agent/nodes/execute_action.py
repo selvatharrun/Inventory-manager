@@ -155,6 +155,7 @@ def _apply_tool_observation(state: AgentState, tool_name: str, observation: Any)
         records = observation.get("records", [])
         if isinstance(records, list):
             state["raw_records"] = records
+            state["config"]["runtime_records"] = records
             state["sku_records"] = _records_to_sku_records(records)
         warnings = observation.get("warnings", [])
         if isinstance(warnings, list):

@@ -99,6 +99,7 @@ def format_output_node(state: AgentState) -> AgentState:
             risk_tags=list(contexts_by_sku.get(sku_id).risk_tags if sku_id in contexts_by_sku else []),
             confidence=llm_struct.get("confidence", "medium"),
             data_quality_flag=None,
+            reasoning_summary=llm_struct.get("reasoning_summary", ""),
         )
         recommendations.append(rec)
 
@@ -119,6 +120,8 @@ def format_output_node(state: AgentState) -> AgentState:
                 ),
                 "context_source": context_source,
                 "velocity_trend": metric.velocity_trend,
+                "reasoning_summary": llm_struct.get("reasoning_summary", ""),
+                "raw_cot": state.get("llm_reasoning_by_sku", {}).get(sku_id, ""),
             }
         )
 
@@ -192,10 +195,12 @@ def format_output_node(state: AgentState) -> AgentState:
         "flow_events": state.get("flow_events", []),
         "tool_call_logs": state.get("tool_call_logs", []),
         "llm_batch_events": state.get("llm_batch_events", []),
+        "llm_reasoning": state.get("llm_reasoning", {}),
         "agent_fallback_reason": state.get("agent_fallback_reason", ""),
         "full_mode_contract_ok": full_mode_contract_ok,
         "deterministic_tool_calls": deterministic_tool_calls,
         "planner_tool_calls": planner_tool_calls,
+        "graph_runtime_stats": state.get("graph_runtime_stats", {}),
         "errors": state["errors"],
         "warnings": state["warnings"],
     }

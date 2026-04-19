@@ -47,6 +47,8 @@ def _initial_state(config: Dict[str, Any]) -> AgentState:
         "recommendations": [],
         "llm_prompts": {},
         "llm_responses": {},
+        "llm_reasoning": {},
+        "llm_reasoning_by_sku": {},
         "llm_retries": {},
         "flow_events": [],
         "tool_call_logs": [],
@@ -64,6 +66,7 @@ def _initial_state(config: Dict[str, Any]) -> AgentState:
         "warnings": [],
         "partial_data": False,
         "graph_source": "default",
+        "graph_runtime_stats": {},
         "output_valid": False,
         "final_output": None,
     }

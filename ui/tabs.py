@@ -13,7 +13,7 @@ import streamlit as st
 
 from cli_helpers import generate_report
 from main import DISCLAIMER
-from ui.config import build_run_config, get_ollama_models, materialize_input_file, new_tempdir, profile_defaults
+from ui.config import build_run_config, get_ollama_models, materialize_input_file, new_tempdir
 from ui.formatters import filter_df, now_file_suffix, payload_to_df, summarize_flow
 from ui.preflight import run_preflight_checks
 from ui.runner import run_once, run_with_scenario
@@ -115,13 +115,25 @@ def _tab_run(base_cfg: Dict[str, Any]) -> None:
             horizontal=True,
             help="Thinking mode uses graph-based context enrichment. Fast mode skips graph enrichment.",
         )
-        profile = st.radio("Profile", ["Quality (recommended)", "Strict latency"], horizontal=True)
-        defaults = profile_defaults(profile)
         execution_mode = st.radio("Execution", ["Standard", "Live trace"], horizontal=True)
 
         col_a, col_b = st.columns(2)
-        temperature = col_a.slider("Temperature", min_value=0.0, max_value=1.0, value=float(defaults["temperature"]), step=0.05)
-        agent_mode = col_b.selectbox("Agent Mode", options=["deterministic", "hybrid", "full"], index=0)
+        temperature = col_a.slider("Temperature", min_value=0.0, max_value=1.0, value=0.1, step=0.05)
+        if mode == "fast":
+            agent_mode = "deterministic"
+            col_b.caption("Agent Mode: `deterministic` (fixed in fast mode)")
+        else:
+            agent_mode = col_b.selectbox("Agent Mode", options=["deterministic", "hybrid", "full"], index=0)
+
+        if mode == "thinking":
+            st.caption(
+                "Thinking mode options: deterministic=fixed pipeline, hybrid=mixed planner+pipeline, full=planner-first strict agentic flow."
+            )
+        reasoning_enabled = st.checkbox(
+            "Capture raw CoT (experimental)",
+            value=False,
+            help="Streams raw model thinking for visibility. Not validated and not used for recommendation logic.",
+        )
 
         agent_max_steps = st.slider("Agent max steps", min_value=1, max_value=12, value=4, step=1)
 
@@ -157,8 +169,8 @@ def _tab_run(base_cfg: Dict[str, Any]) -> None:
         base_url=base_url,
         model=model,
         records_count=len(records),
+        records=records,
         api_key=str(base_cfg.get("ollama", {}).get("api_key", "")),
-        planner_timeout_ms=0,
     )
     st.session_state["last_preflight"] = preflight
 
@@ -234,10 +246,9 @@ def _tab_run(base_cfg: Dict[str, Any]) -> None:
                 "agent_mode": ("deterministic" if mode == "fast" else agent_mode),
                 "agent_max_steps": agent_max_steps,
                 "fast_template_only": fast_template_only,
-                "planner_timeout_ms": 0,
                 "lead_time_default": lead_time_default,
                 "safety_default": safety_default,
-                "profile": profile,
+                "reasoning_enabled": reasoning_enabled,
                 "analysis_scope": analysis_scope,
                 "analysis_sku_ids": selected_sku_ids,
                 "execution_mode": execution_mode,
@@ -426,6 +437,14 @@ def _tab_sku_explorer(payload: Dict[str, Any]) -> None:
         )
         st.write(f"Action: {row['recommended_action']}")
         st.write(str(row["plain_english_explanation"]))
+        reasoning_summary = str(row.get("reasoning_summary", "")).strip()
+        if reasoning_summary:
+            st.caption(f"Reasoning summary: {reasoning_summary}")
+        raw_cot = str(row.get("raw_cot", "")).strip()
+        if raw_cot:
+            with st.expander("Raw model CoT (experimental)"):
+                st.warning("Raw model thinking is unvalidated and shown for debugging only.")
+                st.code(raw_cot, language="text")
 
 
 def _tab_scenario_lab(base_cfg: Dict[str, Any]) -> None:
@@ -506,6 +525,15 @@ def _tab_diagnostics(payload: Dict[str, Any], settings: Dict[str, Any] | None) -
     st.write(f"Agent stop reason: `{metadata.get('agent_fallback_reason', '') or 'completed'}`")
     st.write(f"Graph used: `{metadata.get('graph_used', False)}`")
     st.write(f"Planner used: `{metadata.get('planner_used', False)}`")
+    graph_stats = metadata.get("graph_runtime_stats", {})
+    if isinstance(graph_stats, dict) and graph_stats:
+        st.write(
+            "Runtime graph stats: "
+            f"nodes=`{graph_stats.get('nodes', 0)}` "
+            f"edges=`{graph_stats.get('edges', 0)}` "
+            f"cache_hits=`{graph_stats.get('cache_hits', 0)}` "
+            f"cache_misses=`{graph_stats.get('cache_misses', 0)}`"
+        )
     if settings:
         st.write(f"Analysis scope: `{settings.get('analysis_scope', 'All SKUs')}`")
         st.write(f"Selected SKUs: `{', '.join(settings.get('analysis_sku_ids', [])) or 'all'}`")
@@ -568,6 +596,14 @@ def _tab_diagnostics(payload: Dict[str, Any], settings: Dict[str, Any] | None) -
     if not llm_events.empty:
         st.markdown("#### LLM Batch Events")
         st.dataframe(llm_events, width="stretch", hide_index=True)
+
+    reasoning = metadata.get("llm_reasoning", {})
+    if isinstance(reasoning, dict) and reasoning:
+        st.markdown("#### Raw CoT Batches (experimental)")
+        for key, text in reasoning.items():
+            with st.expander(str(key)):
+                st.warning("Raw model thinking is unvalidated and shown for debugging only.")
+                st.code(str(text), language="text")
 
     preflight = st.session_state.get("last_preflight")
     if isinstance(preflight, dict):
