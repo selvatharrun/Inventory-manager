@@ -63,11 +63,21 @@ def test_fetch_rules_missing_file_returns_default(tmp_path: Path) -> None:
     assert result["rules"]
 
 
-def test_query_graph_networkx_fallback() -> None:
+def test_query_graph_runtime_graph() -> None:
     config = {
         "cache": {"ttl_graph_seconds": 1},
-        "kg_seed_path": "data/kg_seed.json",
+        "runtime_records": [
+            {
+                "sku_id": "SKU-001",
+                "name": "Widget",
+                "category": "electronics",
+                "current_stock": 100,
+                "avg_daily_sales": 10,
+                "lead_time_days": 7,
+                "safety_stock": 5,
+            }
+        ],
     }
     result = query_graph("SKU-001", "electronics", "all", config)
-    assert result["source"] in {"networkx", "cache", "default"}
+    assert result["source"] in {"networkx", "cache"}
     assert "seasonal_factor" in result

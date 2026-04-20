@@ -1,14 +1,19 @@
-"""Knowledge graph query logic using cache and NetworkX fallback."""
+"""Runtime graph query logic using in-memory cache and NetworkX."""
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+import hashlib
+import json
 from typing import Any, Dict
 
 from knowledge.cache_layer import CACHE
-from knowledge.networkx_graph import build_fallback_graph, query_networkx
+from knowledge.networkx_graph import build_runtime_graph, query_runtime_graph
 
-_NETWORKX_GRAPH = None
+
+def _records_fingerprint(records: list[dict[str, Any]]) -> str:
+    """Create stable hash for uploaded records."""
+    normalized = json.dumps(records, sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(normalized.encode("utf-8")).hexdigest()
 
 def query_graph(
     sku_id: str,
@@ -16,33 +21,30 @@ def query_graph(
     query_type: str,
     config: Dict[str, Any],
 ) -> Dict[str, Any]:
-    """Query context using cache, then NetworkX fallback."""
+    """Query runtime context from uploaded-data NetworkX graph only."""
     _ = category
     _ = query_type
 
+    records = config.get("runtime_records")
+    if not isinstance(records, list) or not records:
+        raise ValueError("graph_build_failed: runtime_records missing; graph cannot be built from uploaded data")
+
+    graph_version = str(config.get("graph_schema_version", "runtime-v1"))
+    fingerprint = _records_fingerprint(records)
+    graph_key = f"runtime_graph:{graph_version}:{fingerprint}"
     cache_ttl = int(config.get("cache", {}).get("ttl_graph_seconds", 86400))
-    now_utc = datetime.now(timezone.utc)
-    current_month = now_utc.month
-    date_key = now_utc.strftime("%Y%m%d")
-    cache_key = f"graph:{sku_id}:all:{date_key}"
 
-    hit, value, _ttl = CACHE.get(cache_key)
-    if hit and isinstance(value, dict):
-        cached = dict(value)
-        cached["source"] = "cache"
-        return cached
+    hit, cached_graph, _ttl = CACHE.get(graph_key)
+    if hit:
+        graph = cached_graph
+        cache_hit = True
+    else:
+        graph = build_runtime_graph(records)
+        CACHE.set(graph_key, graph, ttl_seconds=cache_ttl)
+        cache_hit = False
 
-    graph = _get_networkx_graph(config)
-    context = query_networkx(graph, sku_id, current_month)
-
-    CACHE.set(cache_key, context, ttl_seconds=cache_ttl)
+    context = query_runtime_graph(graph, sku_id)
+    context["source"] = "cache" if cache_hit else "networkx"
+    context["graph_cache_hit"] = cache_hit
+    context["graph_fingerprint"] = fingerprint[:16]
     return context
-
-
-def _get_networkx_graph(config: Dict[str, Any]):
-    """Lazily initialize and return fallback NetworkX graph."""
-    global _NETWORKX_GRAPH
-    if _NETWORKX_GRAPH is None:
-        seed_path = str(config.get("kg_seed_path", "data/kg_seed.json"))
-        _NETWORKX_GRAPH = build_fallback_graph(seed_path=seed_path)
-    return _NETWORKX_GRAPH

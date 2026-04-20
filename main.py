@@ -81,11 +81,17 @@ def run_analysis(config: Dict[str, Any]) -> Dict[str, Any]:
         "recommendations": [],
         "llm_prompts": {},
         "llm_responses": {},
+        "llm_reasoning": {},
+        "llm_reasoning_by_sku": {},
         "llm_retries": {},
+        "flow_events": [],
+        "tool_call_logs": [],
+        "llm_batch_events": [],
         "agent_step_count": 0,
         "agent_max_steps": int(config.get("agent_max_steps", 3)),
         "agent_scratchpad": [],
         "agent_tool_history": [],
+        "agent_seen_action_fingerprints": [],
         "agent_done": False,
         "agent_pending_action": None,
         "agent_fallback_reason": "",
@@ -94,12 +100,56 @@ def run_analysis(config: Dict[str, Any]) -> Dict[str, Any]:
         "warnings": [],
         "partial_data": False,
         "graph_source": "default",
+        "graph_runtime_stats": {},
         "output_valid": False,
         "final_output": None,
     }
 
     app = build_graph()
-    final_state = app.invoke(state)
+    try:
+        final_state = app.invoke(state)
+    except Exception as exc:
+        state["errors"].append(
+            {
+                "node": state.get("current_node", "unknown"),
+                "sku_id": "",
+                "message": str(exc),
+            }
+        )
+        state["warnings"].append("run_failed_before_output")
+        return {
+            "run_id": state["run_id"],
+            "generated_at": datetime.now(timezone.utc).isoformat(),
+            "summary": {
+                "total_skus_analyzed": 0,
+                "critical_count": 0,
+                "watch_count": 0,
+                "healthy_count": 0,
+                "overstock_count": 0,
+                "skus_skipped": 0,
+                "overall_health": "poor",
+                "top_priority_skus": [],
+            },
+            "recommendations": [],
+            "metadata": {
+                "llm_model": config.get("ollama", {}).get("model", "llama3.2:1b"),
+                "graph_source": state.get("graph_source", "default"),
+                "config_version": "1.0.0",
+                "execution_time_ms": 0,
+                "partial_data": True,
+                "agent_mode": config.get("agent_mode", "deterministic"),
+                "agent_steps_executed": state.get("agent_step_count", 0),
+                "agent_tool_history": state.get("agent_tool_history", []),
+                "flow_events": state.get("flow_events", []),
+                "tool_call_logs": state.get("tool_call_logs", []),
+                "llm_batch_events": state.get("llm_batch_events", []),
+                "agent_fallback_reason": state.get("agent_fallback_reason", ""),
+                "graph_runtime_stats": state.get("graph_runtime_stats", {}),
+                "errors": state.get("errors", []),
+                "warnings": state.get("warnings", []),
+            },
+            "disclaimer": DISCLAIMER,
+        }
     return final_state.get("final_output") or {
         "run_id": state["run_id"],
         "generated_at": datetime.now(timezone.utc).isoformat(),
@@ -123,6 +173,9 @@ def run_analysis(config: Dict[str, Any]) -> Dict[str, Any]:
             "agent_mode": config.get("agent_mode", "deterministic"),
             "agent_steps_executed": final_state.get("agent_step_count", 0),
             "agent_tool_history": final_state.get("agent_tool_history", []),
+            "flow_events": final_state.get("flow_events", []),
+            "tool_call_logs": final_state.get("tool_call_logs", []),
+            "llm_batch_events": final_state.get("llm_batch_events", []),
             "agent_fallback_reason": final_state.get("agent_fallback_reason", ""),
             "errors": final_state.get("errors", []),
             "warnings": final_state.get("warnings", []),
@@ -142,7 +195,6 @@ def main() -> None:
     base_config = load_threshold_config(Path(args.config))
     base_config["data_path"] = str(Path(args.data))
     base_config["config_path"] = str(Path(args.config))
-    base_config["kg_seed_path"] = "data/kg_seed.json"
     base_config["mode"] = args.mode
     base_config["fast_template_only"] = bool(args.fast_template_only)
     if args.model:
@@ -155,8 +207,6 @@ def main() -> None:
 
     if args.mode == "fast":
         base_config["agent_mode"] = "deterministic"
-        base_config.setdefault("ollama", {}).setdefault("num_predict", 900)
-        base_config.setdefault("ollama", {}).setdefault("timeout_ms", 12000)
     else:
         base_config["agent_mode"] = args.agent_mode or str(agent_cfg.get("mode", "hybrid"))
     base_config["agent_max_steps"] = int(agent_cfg.get("max_steps", base_config.get("agent_max_steps", 3)))
